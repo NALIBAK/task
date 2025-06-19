@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Task Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: Calm Neutrals -->
+    <!-- Application Structure Plan: The static task list is transformed into a dynamic, single-page application with a task-oriented dashboard structure. This design prioritizes user workflow and ease of use. The structure includes: 1) a header with an input form for adding new tasks, 2) a main content area split into a task list and a dashboard/stats panel, and 3) interactive filter controls. This is more effective than a static report because it allows for real-time creation, modification, and visualization of tasks. The user flow is simple: add a task, see it appear in the list, interact with it, and view summary stats in the chart, all without leaving the page. This structure was chosen to create a functional and intuitive tool directly from the static report's core purpose. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: Task Table -> Goal: Organize & Manage Tasks -> Viz/Method: A dynamic list of task cards using HTML/CSS/JS. -> Interaction: Add, delete, edit, and change status/priority for each task. Filter the list by status. -> Justification: A dynamic list is the standard, most effective UI for managing to-do items, offering flexibility that a static table lacks. -> Library/Method: Vanilla JS & Tailwind.
+        - Report Info: Task Status -> Goal: Compare task progress -> Viz/Method: A Donut Chart showing the proportion of tasks by status (To-Do, In Progress, Done). -> Interaction: The chart updates automatically as task statuses change. -> Justification: Fulfills the requirement for a chart and provides an immediate, high-level visual summary of progress, which is a valuable addition to a task tracker. -> Library/Method: Chart.js with Canvas.
+        - Report Info: Quick Notes -> Goal: Inform/Capture Ideas -> Viz/Method: An editable textarea. -> Interaction: Simple text input. -> Justification: The most direct way to allow for free-form note-taking. -> Library/Method: HTML & Tailwind.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            background-color: #f8fafc; /* Tailwind bg-slate-50 */
+            font-family: 'Inter', sans-serif;
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        .task-card {
+            transition: all 0.2s ease-in-out;
+        }
+        .task-card.status-done {
+            background-color: #f1f5f9; /* Tailwind bg-slate-100 */
+        }
+        .task-card.status-done .task-text {
+            text-decoration: line-through;
+            color: #64748b; /* Tailwind text-slate-500 */
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-6xl">
+
+        <!-- Header and Task Input -->
+        <header class="mb-8">
+            <h1 class="text-4xl font-bold text-teal-700 mb-2">Task Tracker</h1>
+            <p class="text-slate-500 text-lg">A dynamic dashboard to organize your day.</p>
+            
+            <form id="add-task-form" class="mt-6 p-4 bg-white rounded-lg shadow-sm flex flex-col md:flex-row md:items-center gap-4">
+                <input type="text" id="task-input" placeholder="What needs to be done?" class="flex-grow p-3 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:outline-none" required>
+                <input type="date" id="due-date-input" class="p-3 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                <select id="priority-input" class="p-3 border border-slate-300 rounded-md bg-white focus:ring-2 focus:ring-teal-500 focus:outline-none">
+                    <option value="low">Low Priority</option>
+                    <option value="medium">Medium Priority</option>
+                    <option value="high">High Priority</option>
+                </select>
+                <button type="submit" class="bg-teal-600 text-white font-semibold py-3 px-6 rounded-md hover:bg-teal-700 transition-colors">Add Task</button>
+            </form>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Main Content: Task List -->
+            <div class="lg:col-span-2">
+                <div class="flex flex-col sm:flex-row justify-between items-baseline mb-4">
+                    <h2 class="text-2xl font-semibold">My Tasks</h2>
+                    <div id="filter-buttons" class="flex items-center gap-2 mt-2 sm:mt-0">
+                        <button data-filter="all" class="filter-btn bg-teal-500 text-white py-1 px-3 rounded-full text-sm">All</button>
+                        <button data-filter="todo" class="filter-btn bg-white py-1 px-3 rounded-full text-sm border">To-Do</button>
+                        <button data-filter="inprogress" class="filter-btn bg-white py-1 px-3 rounded-full text-sm border">In Progress</button>
+                        <button data-filter="done" class="filter-btn bg-white py-1 px-3 rounded-full text-sm border">Done</button>
+                    </div>
+                </div>
+                <div id="task-list" class="space-y-3">
+                    <!-- Tasks will be dynamically inserted here -->
+                </div>
+                 <div class="mt-8">
+                    <h2 class="text-2xl font-semibold mb-4">💡 Quick Notes</h2>
+                    <textarea id="quick-notes" class="w-full h-32 p-3 bg-white border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-teal-500 focus:outline-none" placeholder="Jot down ideas, reminders, or anything else..."></textarea>
+                </div>
+            </div>
+
+            <!-- Sidebar: Dashboard Stats -->
+            <aside class="lg:col-span-1">
+                <div class="bg-white p-6 rounded-lg shadow-sm sticky top-8">
+                    <h2 class="text-2xl font-semibold mb-4">Dashboard</h2>
+                    <p class="text-slate-500 mb-6">Here's a visual summary of your tasks. Keep up the great work!</p>
+                    <div class="chart-container">
+                        <canvas id="task-chart"></canvas>
+                    </div>
+                    <div id="stats-summary" class="mt-6 text-center space-y-2">
+                        <!-- Stats summary will be dynamically inserted here -->
+                    </div>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const taskForm = document.getElementById('add-task-form');
+            const taskInput = document.getElementById('task-input');
+            const dueDateInput = document.getElementById('due-date-input');
+            const priorityInput = document.getElementById('priority-input');
+            const taskList = document.getElementById('task-list');
+            const filterButtons = document.getElementById('filter-buttons');
+            const chartCanvas = document.getElementById('task-chart');
+            const statsSummary = document.getElementById('stats-summary');
+
+            let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+            let currentFilter = 'all';
+            let taskChart;
+
+            const priorityMap = {
+                high: { label: 'High', color: 'border-red-400', text: 'text-red-600' },
+                medium: { label: 'Medium', color: 'border-yellow-400', text: 'text-yellow-600' },
+                low: { label: 'Low', color: 'border-green-400', text: 'text-green-600' }
+            };
+
+            const statusMap = {
+                todo: { label: 'To-Do' },
+                inprogress: { label: 'In Progress' },
+                done: { label: 'Done' }
+            };
+
+            const saveTasks = () => {
+                localStorage.setItem('tasks', JSON.stringify(tasks));
+            };
+
+            const renderTasks = () => {
+                taskList.innerHTML = '';
+
+                const filteredTasks = tasks.filter(task => {
+                    if (currentFilter === 'all') return true;
+                    return task.status === currentFilter;
+                });
+
+                if (filteredTasks.length === 0) {
+                    taskList.innerHTML = `
+                        <div class="text-center p-8 bg-white rounded-lg shadow-sm">
+                            <h3 class="font-semibold text-lg">No tasks here!</h3>
+                            <p class="text-slate-500">Try adding a new task or changing the filter.</p>
+                        </div>
+                    `;
+                } else {
+                    filteredTasks.forEach(task => {
+                        const priority = priorityMap[task.priority];
+                        const taskElement = document.createElement('div');
+                        taskElement.className = `task-card bg-white p-4 rounded-lg shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4 ${priority.color} ${task.status === 'done' ? 'status-done' : ''}`;
+                        taskElement.dataset.id = task.id;
+
+                        taskElement.innerHTML = `
+                            <div class="flex-grow">
+                                <p class="task-text font-medium">${task.text}</p>
+                                <div class="text-sm text-slate-500 mt-1 flex items-center gap-4">
+                                    <span>Due: ${task.dueDate || 'No date'}</span>
+                                    <span class="font-semibold ${priority.text}">● ${priority.label}</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 self-end sm:self-center">
+                                <select class="status-select bg-transparent text-sm p-1 border rounded-md" data-id="${task.id}">
+                                    <option value="todo" ${task.status === 'todo' ? 'selected' : ''}>To-Do</option>
+                                    <option value="inprogress" ${task.status === 'inprogress' ? 'selected' : ''}>In Progress</option>
+                                    <option value="done" ${task.status === 'done' ? 'selected' : ''}>Done</option>
+                                </select>
+                                <button class="delete-btn text-slate-400 hover:text-red-500" data-id="${task.id}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg>
+                                </button>
+                            </div>
+                        `;
+                        taskList.appendChild(taskElement);
+                    });
+                }
+                updateDashboard();
+            };
+
+            const updateDashboard = () => {
+                const totalTasks = tasks.length;
+                const statusCounts = {
+                    todo: tasks.filter(t => t.status === 'todo').length,
+                    inprogress: tasks.filter(t => t.status === 'inprogress').length,
+                    done: tasks.filter(t => t.status === 'done').length
+                };
+
+                statsSummary.innerHTML = `
+                    <p class="text-slate-600"><span class="font-bold text-3xl text-teal-600">${totalTasks}</span> Total Tasks</p>
+                    <p class="text-slate-500">${statusCounts.done} completed, ${statusCounts.todo + statusCounts.inprogress} remaining.</p>
+                `;
+
+                const chartData = {
+                    labels: ['To-Do', 'In Progress', 'Done'],
+                    datasets: [{
+                        label: 'Task Status',
+                        data: [statusCounts.todo, statusCounts.inprogress, statusCounts.done],
+                        backgroundColor: ['#f59e0b', '#3b82f6', '#10b981'],
+                        hoverOffset: 4,
+                        borderColor: '#f8fafc',
+                        borderWidth: 4
+                    }]
+                };
+
+                if (taskChart) {
+                    taskChart.data = chartData;
+                    taskChart.update();
+                } else {
+                    const ctx = chartCanvas.getContext('2d');
+                    taskChart = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: chartData,
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            cutout: '70%',
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                    labels: {
+                                        padding: 20,
+                                        font: { size: 14 }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            };
+
+            taskForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const text = taskInput.value.trim();
+                if (text) {
+                    tasks.push({
+                        id: Date.now(),
+                        text: text,
+                        dueDate: dueDateInput.value,
+                        priority: priorityInput.value,
+                        status: 'todo'
+                    });
+                    saveTasks();
+                    renderTasks();
+                    taskForm.reset();
+                    taskInput.focus();
+                }
+            });
+
+            taskList.addEventListener('click', (e) => {
+                if (e.target.closest('.delete-btn')) {
+                    const id = e.target.closest('.delete-btn').dataset.id;
+                    tasks = tasks.filter(task => task.id != id);
+                    saveTasks();
+                    renderTasks();
+                }
+            });
+
+            taskList.addEventListener('change', (e) => {
+                if (e.target.classList.contains('status-select')) {
+                    const id = e.target.dataset.id;
+                    const status = e.target.value;
+                    const task = tasks.find(task => task.id == id);
+                    if (task) {
+                        task.status = status;
+                        saveTasks();
+                        renderTasks();
+                    }
+                }
+            });
+
+            filterButtons.addEventListener('click', (e) => {
+                if(e.target.tagName === 'BUTTON') {
+                    currentFilter = e.target.dataset.filter;
+                    document.querySelectorAll('.filter-btn').forEach(btn => {
+                        btn.classList.remove('bg-teal-500', 'text-white');
+                        btn.classList.add('bg-white');
+                    });
+                    e.target.classList.add('bg-teal-500', 'text-white');
+                    e.target.classList.remove('bg-white');
+                    renderTasks();
+                }
+            });
+
+            // Initial render
+            renderTasks();
+        });
+    </script>
+</body>
+</html>
